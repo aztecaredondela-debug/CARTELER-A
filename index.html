@@ -34,15 +34,16 @@ canvas{width:100%;height:auto;border-radius:8px;display:block;margin:12px 0}
 .msg{color:#ffb74d;font-size:13px;min-height:18px}
 .acts{display:flex;gap:8px;flex-wrap:wrap}.acts button{flex:1}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <main>
 <h1>Cartel SAR Balonmán</h1>
 <div class="tabs"><button id="tCasa" class="on">XOGAMOS NA CASA</button><button id="tFora">XOGAMOS FORA</button></div>
 
-<label>1) Pega aquí el Excel (cabecera: Fecha, Hora, Local, Visitante, Categoría, Pabellón). Las filas con color de relleno salen en grande.</label>
+<label>1) Carga el Excel de la federación (.xlsx) tal como te llega, o pega aquí las filas (cabecera: Fecha, Hora, Local, Visitante, Categoría, Pabellón). Con el .xlsx usa ★ para los destacados; si pegas, las filas con color de relleno salen en grande.</label>
 <div id="box" contenteditable="true" spellcheck="false"></div>
-<div class="acts" style="margin-top:8px"><button class="b s" id="bEj">Cargar ejemplo</button><button class="b s" id="bClr">Borrar</button></div>
+<div class="acts" style="margin-top:8px"><button class="b" id="bXl">Cargar Excel (.xlsx)</button><input type="file" id="fXl" accept=".xlsx,.xlsm,.xls" hidden><button class="b s" id="bEj">Cargar ejemplo</button><button class="b s" id="bClr">Borrar</button></div>
 
 <div class="row">
   <div><label>Sábado del fin de semana</label><input type="date" id="sab"></div>
@@ -66,18 +67,46 @@ const DIA={6:'SÁBADO',0:'DOMINGO'};
 const ALIAS={fecha:['FECHA','DIA','DATA','DATE'],hora:['HORA','HORARIO','TIME'],
  local:['LOCAL','EQUIPO LOCAL','EQUIPO 1','CLUB LOCAL','EQUIPO A'],
  visitante:['VISITANTE','EQUIPO VISITANTE','EQUIPO 2','CLUB VISITANTE','RIVAL','EQUIPO B'],
- categoria:['CATEGORIA','COMPETICION','LIGA','DIVISION','GRUPO','TORNEO'],
+ categoria:['CATEGORIA','DIVISION','GRUPO','TORNEO'],comp:['COMPETICION','LIGA'],
  pabellon:['PABELLON','CAMPO','INSTALACION','LUGAR','POLIDEPORTIVO','PISTA']};
 const ABREV=[[/PRIMERA\s+AUTON[OÓ]MIC[AO]/gi,'1ª AUT.'],[/SEGUNDA\s+AUTON[OÓ]MIC[AO]/gi,'2ª AUT.'],[/AUTON[OÓ]MIC[AO]/gi,'AUT.'],
  [/CADETE/gi,'CAD.'],[/INFANTIL/gi,'INF.'],[/JUVENIL/gi,'JUV.'],[/ALEV[IÍ]N/gi,'ALE.'],[/BENJAM[IÍ]N/gi,'BEN.'],[/FEMENIN[OA]/gi,'FEM.'],[/MASCULIN[OA]/gi,'MASC.']];
 const GRIS='#e8e8e2',LIMA='#c9d84a',AMA='#f0e846',LIN='#bec83c',OSC='#232323';
 
-let mode='casa', partidos=[], imgs={};
+let mode='casa', partidos=[], imgs={}, filasExt=null;
 const norm=s=>String(s??'').replace(/ª/g,'A').replace(/º/g,'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
 const abrev=c=>ABREV.reduce((t,[r,x])=>t.replace(r,x),String(c).toUpperCase()).replace(/\s+/g,' ').trim();
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const dOf=s=>new Date(s+'T12:00:00');
 const addD=(s,n)=>{const d=dOf(s);d.setDate(d.getDate()+n);return iso(d)};
+
+/* ---------- Excel de la federación ---------- */
+// Sexo de cada equipo SAR (la federación no lo trae en la categoría). Edita aquí si cambia.
+const SEXO={'SAR RODAVIGO':'FEM.','SAR IMPERNOROESTE':'FEM.','SAR GLOBALMAR':'MASC.','SAR OPMOBILITY':'MASC.'};
+const limpia=s=>String(s??'').replace(/\s+/g,' ').trim().toUpperCase();
+function equipoClub(l,v){const re=new RegExp('\\b'+(norm($('#club').value)||'SAR')+'\\b');return re.test(norm(l))?l:re.test(norm(v))?v:''}
+function catFed(comp,cat,eq){
+  const C=norm(comp),G=norm(cat);
+  if(/HONOR PLATA/.test(C))return 'DHP FEM.';
+  if(/MIXTO/.test(C))return limpia(comp);
+  const sexo=/FEM|MASC/.test(C+' '+G)?'':(SEXO[norm(eq)]||'');
+  const liga=/LIGA OURO/.test(C)?'LIGA OURO':/AUTONOMICA/.test(C)?abrev(comp):'';
+  return [liga,/SENIOR/.test(G)?'':abrev(cat),sexo].filter(Boolean).join(' ').replace(/\s+/g,' ');
+}
+function celdaTxt(v){
+  if(v instanceof Date){const d=new Date(v.getTime()+30000),p=n=>String(n).padStart(2,'0');return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`}
+  return String(v??'').trim();
+}
+async function cargarXlsx(file){
+  try{
+    if(typeof XLSX==='undefined')throw new Error('no se cargó la librería de Excel (necesita conexión la primera vez)');
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+    filasExt=rows.map(r=>({cells:r.map(celdaTxt),color:false}));
+    $('#box').textContent='Archivo cargado: '+file.name+' ('+rows.length+' filas)';
+    actualizar(true);
+  }catch(e){$('#msg').textContent='No se pudo leer el Excel: '+e.message}
+}
 
 function parseFecha(s){
   s=String(s||'');let m;
@@ -111,8 +140,10 @@ function parsear(rows){
   for(let i=hi+1;i<rows.length;i++){
     const c=rows[i].cells,g=k=>k in cols?(c[cols[k]]||''):'';
     const fecha=parseFecha(g('fecha'));if(!fecha||!g('local')||!g('visitante'))continue;
-    out.push({fecha,hora:parseHora(g('hora'))||parseHora(g('fecha'))||'00:00',local:g('local').toUpperCase(),visitante:g('visitante').toUpperCase(),
-      cat:g('categoria'),pab:g('pabellon'),dest:rows[i].color,_c:rows[i].color});
+    const lo=limpia(g('local')),vi=limpia(g('visitante')),h=parseHora(g('hora'))||parseHora(g('fecha'))||'00:00';
+    const cat=('comp'in cols&&'categoria'in cols)?catFed(g('comp'),g('categoria'),equipoClub(lo,vi)):(g('categoria')||g('comp'));
+    out.push({fecha,hora:h==='00:00'?'--:--':h,ord:h==='00:00'?'99:99':h,local:lo,visitante:vi,
+      cat,pab:g('pabellon'),dest:rows[i].color,_c:rows[i].color});
   }
   if(out.length&&out.every(p=>p._c))out.forEach(p=>p.dest=false); // todo coloreado = bandas, no sirve de marca
   return out;
@@ -125,10 +156,10 @@ function sabadoAuto(){
   const hoy=iso(new Date()),d0=mios.find(f=>f>=hoy)||mios[0],wd=(dOf(d0).getDay()+6)%7;
   return wd<=4?addD(d0,5-wd):addD(d0,-(wd-5));
 }
-const seleccion=()=>{const s=$('#sab').value;return partidos.filter(p=>esMio(p)&&(p.fecha===s||p.fecha===addD(s,1))).sort((a,b)=>(a.fecha+a.hora).localeCompare(b.fecha+b.hora))};
+const seleccion=()=>{const s=$('#sab').value;return partidos.filter(p=>esMio(p)&&(p.fecha===s||p.fecha===addD(s,1))).sort((a,b)=>(a.fecha+(a.ord||a.hora)).localeCompare(b.fecha+(b.ord||b.hora)))};
 
 function actualizar(auto){
-  partidos=parsear(leerCaja());
+  partidos=parsear(filasExt||leerCaja());
   if(auto)$('#sab').value=sabadoAuto();
   pintarLista();dibujar();
 }
@@ -250,7 +281,9 @@ function dibujar(){
   }
 }
 function pabellon(p){
-  let v=(p.pab||'').trim().toUpperCase();
+  let v=(p.pab||'').replace(/[`´]/g,"'").replace(/\s+/g,' ').trim().toUpperCase();
+  if(mode==='casa'&&/BOMBONERA/.test(norm(v)))v=($('#pab').value||'').toUpperCase();
+  v=v.replace(/^P\.\s*MPAL\.\s*DE\s+/,'PAVILLÓN MUNICIPAL DE ').replace(/^PAVILLON\b/,'PAVILLÓN').replace(/^PABELLON\b/,'PABELLÓN');
   if(!v&&mode==='casa')v=($('#pab').value||'').toUpperCase();
   if(v&&!/^(PAVILL|PABELL|POLIDEPORTIVO|CAMPO)/.test(norm(v)))v='PAVILLÓN '+v;
   return v;
@@ -259,12 +292,15 @@ function pabellon(p){
 /* ---------- eventos ---------- */
 function modo(m){mode=m;$('#tCasa').classList.toggle('on',m==='casa');$('#tFora').classList.toggle('on',m==='fora');actualizar(true)}
 $('#tCasa').onclick=()=>modo('casa');$('#tFora').onclick=()=>modo('fora');
-let tm;$('#box').addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(()=>actualizar(true),250)});
-$('#box').addEventListener('paste',e=>{const c=e.clipboardData;if(c&&!/<table/i.test(c.getData('text/html'))){e.preventDefault();$('#box').textContent=c.getData('text/plain');actualizar(true)}});
+let tm;$('#box').addEventListener('input',()=>{filasExt=null;clearTimeout(tm);tm=setTimeout(()=>actualizar(true),250)});
+$('#box').addEventListener('paste',e=>{const c=e.clipboardData;if(c&&!/<table/i.test(c.getData('text/html'))){e.preventDefault();filasExt=null;$('#box').textContent=c.getData('text/plain');actualizar(true)}});
 $('#sab').onchange=()=>{pintarLista();dibujar()};
 ['club','pab'].forEach(k=>$('#'+k).oninput=()=>{try{localStorage[k]=$('#'+k).value}catch(e){}actualizar(false)});
-$('#bClr').onclick=()=>{$('#box').innerHTML='';actualizar(true)};
+$('#bClr').onclick=()=>{filasExt=null;$('#box').innerHTML='';actualizar(true)};
+$('#bXl').onclick=()=>$('#fXl').click();
+$('#fXl').onchange=e=>{const f=e.target.files[0];if(f)cargarXlsx(f);e.target.value=''};
 $('#bEj').onclick=()=>{
+  filasExt=null;
   const f=[['Fecha','Hora','Local','Visitante','Categoría','Pabellón'],
   ['10/10/2026','10:00','SAR IMPERNOROESTE','BALONMAN PORRIÑO','Cadete Femenino','A Bombonera'],
   ['10/10/2026','11:15','SAR RODAVIGO','BM CULLEREDO SUTENOR','Liga Ouro Cad. Fem','A Bombonera'],

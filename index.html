@@ -33,6 +33,7 @@ canvas{width:100%;height:auto;border-radius:8px;border:1px solid var(--bd)}
 <div class="card"><div class="r">
 <div><label>Fecha sábado</label><input id="ds" value="10 OUT."></div>
 <div><label>Fecha domingo</label><input id="dd" value="11 OUT."></div>
+<div class="s6"><label>Tipo de cartel</label><select id="pmode" onchange="draw()"><option value="h">En casa (XOGAMOS NA CASA)</option><option value="a">Fuera (XOGAMOS FÓRA)</option></select></div>
 <div class="s6"><label>Pabellón</label><input id="venue" value="PAVILLÓN A BOMBONERA"></div>
 <div class="s6"><label style="display:flex;gap:6px;align-items:center;color:var(--tx)"><input type="checkbox" id="hidef" style="width:auto" onchange="draw()"> No repetir en las tablas los partidos con cuadro verde</label></div></div>
 <div class="r">
@@ -47,11 +48,14 @@ canvas{width:100%;height:auto;border-radius:8px;border:1px solid var(--bd)}
 <div class="card"><label>Excel de la federación (.xlsx, .xls o .csv)</label><input type="file" id="xf" accept=".xlsx,.xls,.csv"><div id="shw" style="margin-top:6px"></div></div>
 <div class="card"><div class="r"><div><label>Sábado del fin de semana</label><input type="date" id="isat"></div>
 <div><label>Equipos (separados por coma)</label><input id="iteams" value="SAR"></div>
-<div class="s6"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="ihome" checked style="width:auto"> Solo partidos en casa (el equipo es local)</label></div></div>
+<div class="s6 note">El programa separa solo los partidos del fin de semana: <b>EN CASA</b> = la SAR es el equipo local (va en primer lugar) · <b>FUERA</b> = la SAR es el visitante (va en segundo lugar).</div>
+<div><label>Equipos masculinos (palabras)</label><input id="imasc" value="OPMOBILITY, GLOBALMAR"></div>
+<div><label>Equipos femeninos (palabras)</label><input id="ifem" value="IMPERNOROESTE, RODAVIGO"></div>
+<div class="s6 note" id="iwk"></div></div>
 <div id="imap" class="r"></div></div>
 <h2>Partidos encontrados <span class="note">(★ = cuadro verde, ✕ = quitar: aplazado, etc.)</span></h2>
 <div id="ires"><div class="note">Carga el Excel para ver los partidos.</div></div>
-<div class="row"><button class="p" onclick="useImp()">Usar en el cartel →</button><span class="note" id="imsg"></span></div>
+<div class="row"><button class="p" id="bH" onclick="useImp('h')">Cartel EN CASA →</button><button class="p" id="bA" onclick="useImp('a')">Cartel FUERA →</button><button id="bB" onclick="dlBoth()">Descargar los dos PNG</button><span class="note" id="imsg"></span></div>
 </div>
 </div>
 <div class="sticky"><canvas id="cv" width="1080" height="1350"></canvas>
@@ -78,18 +82,19 @@ function add(){M.push({d:'s',cat:'',card:'',h:'SAR ',a:'',t:'',f:0});build();dra
 function build(){const L=$('list');L.innerHTML='';
 M.forEach((m,i)=>{const c=document.createElement('div');c.className='card';
 c.innerHTML=`<div class="r"><div class="s2"><label>Día</label><select data-i="${i}" data-f="d"><option value="s">Sábado</option><option value="d">Domingo</option></select></div>
-<div class="s2"><label>Hora</label><input data-i="${i}" data-f="t" value="${m.t}"></div>
-<div class="s2"><label>★ Cuadro</label><select data-i="${i}" data-f="f"><option value="0">No</option><option value="1">Sí</option></select></div>
+<div><label>Hora</label><input data-i="${i}" data-f="t" value="${m.t}"></div>
+<div><label>★</label><select data-i="${i}" data-f="f"><option value="0">No</option><option value="1">Sí</option></select></div>
+<div class="s2"><label>SAR juega (auto del Excel)</label><select data-i="${i}" data-f="away"><option value="0">En casa (local)</option><option value="1">Fuera (visitante)</option></select></div>
 <div class="s3" style="grid-column:span 3"><label>Local</label><input data-i="${i}" data-f="h" value="${m.h}"></div>
-<div style="grid-column:span 3"><label>Rival</label><input data-i="${i}" data-f="a" value="${m.a}"></div>
+<div style="grid-column:span 3"><label>Visitante</label><input data-i="${i}" data-f="a" value="${m.a}"></div>
 <div style="grid-column:span 3"><label>Competición (tabla)</label><input data-i="${i}" data-f="cat" value="${m.cat}"></div>
 <div style="grid-column:span 3"><label>Título del cuadro</label><input data-i="${i}" data-f="card" value="${m.card}"></div>
 <div style="grid-column:span 3"><label>Escudo rival</label><input type="file" accept="image/*" data-i="${i}" data-c="1"></div>
 <div style="grid-column:span 2"><label>Color rival</label><input type="color" data-i="${i}" data-f="col" value="${m.col||'#7a1b1b'}" style="padding:2px;height:34px"></div>
 <div style="align-self:end"><button onclick="del(${i})">✕</button></div></div></div>`;
-L.appendChild(c);c.querySelector('[data-f=d]').value=m.d;c.querySelector('[data-f=f]').value=m.f?'1':'0'});
-L.querySelectorAll('[data-f]').forEach(e=>e.addEventListener('input',()=>{const m=M[e.dataset.i],f=e.dataset.f;m[f]=f==='f'?+e.value:e.value;draw()}));
-L.querySelectorAll('[data-c]').forEach(e=>e.addEventListener('change',()=>rd(e.files[0],u=>{const m=M[e.dataset.i];m.img=u;CR[nk(m.a)]=u;try{localStorage.setItem('xc',JSON.stringify(CR))}catch(x){}draw()})))}
+L.appendChild(c);c.querySelector('[data-f=d]').value=m.d;c.querySelector('[data-f=f]').value=m.f?'1':'0';c.querySelector('[data-f=away]').value=m.away?'1':'0'});
+L.querySelectorAll('[data-f]').forEach(e=>e.addEventListener('input',()=>{const m=M[e.dataset.i],f=e.dataset.f;m[f]=(f==='f'||f==='away')?+e.value:e.value;draw()}));
+L.querySelectorAll('[data-c]').forEach(e=>e.addEventListener('change',()=>rd(e.files[0],u=>{const m=M[e.dataset.i];m.img=u;CR[nk(m.away?m.h:m.a)]=u;try{localStorage.setItem('xc',JSON.stringify(CR))}catch(x){}draw()})))}
 function del(i){M.splice(i,1);build();draw()}
 document.querySelectorAll('[data-k]').forEach(e=>e.addEventListener('change',()=>rd(e.files[0],u=>{IMG[e.dataset.k]=u;draw()})));
 function rd(f,cb){if(!f)return;const r=new FileReader();r.onload=()=>{// shrink to keep storage small
@@ -121,16 +126,17 @@ const bg=img(IMG.bg);if(bg){ctx.globalAlpha=.16;ctx.drawImage(bg,0,0,W,380);ctx.
 ctx.strokeStyle='rgba(255,255,255,.14)';ctx.lineWidth=5;[64,30].forEach(r=>{ctx.beginPath();ctx.arc(ox+D-84,150,r,0,7);ctx.stroke()});
 ctx.translate(ox,0);
 ctx.fillStyle='#fff';ctx.font=O('600',38);ctx.textAlign='left';const t=m.card||m.cat;fit(t,30,52,D-190,38,'left',16);ctx.fillRect(30,59,Math.min(ctx.measureText(t).width,D-190),3);
-const hw=D*.78-64;brush(64,74,hw,60,3,'#d9d9d4');ctx.fillStyle='#1c1c1a';ctx.font=O('600',40);fit(m.h,(104+64+hw)/2,118,hw-80,40,'center',16);
-crest(img(IMG.crest),54,104,46,'SAR');
+const hw=D*.78-64;brush(64,74,hw,60,3,'#d9d9d4');ctx.fillStyle=m.away?(m.col||'#7a1b1b'):'#1c1c1a';ctx.font=O('600',40);fit(m.h,(104+64+hw)/2,118,hw-80,40,'center',16);
+const rc=(cx,cy)=>{const ai=img(m.img);if(ai){const k=Math.min(100/ai.naturalWidth,100/ai.naturalHeight);ctx.drawImage(ai,cx-ai.naturalWidth*k/2,cy-ai.naturalHeight*k/2,ai.naturalWidth*k,ai.naturalHeight*k)}else crest(null,cx,cy,46,((m.away?m.h:m.a)||'?')[0])};
+if(m.away)rc(54,104);else crest(img(IMG.crest),54,104,46,'SAR');
 vsbox(D*.5-64,128,'V');vsbox(D*.5-14,160,'S');
-const bx=D*.34,bw=D-bx-22;brush(bx,236,bw,58,7,'#d9d9d4');ctx.fillStyle=m.col||'#7a1b1b';ctx.font=O('600',38);ctx.textAlign='left';fit(m.a,bx+(bw-90)/2+14,275,bw-120,38,'center',12);
-const ai=img(m.img);if(ai){const k=Math.min(100/ai.naturalWidth,100/ai.naturalHeight);ctx.drawImage(ai,D-54-ai.naturalWidth*k/2,265-ai.naturalHeight*k/2,ai.naturalWidth*k,ai.naturalHeight*k)}else crest(null,D-54,265,46,(m.a||'?')[0]);
+const bx=D*.34,bw=D-bx-22;brush(bx,236,bw,58,7,'#d9d9d4');ctx.fillStyle=m.away?'#1c1c1a':(m.col||'#7a1b1b');ctx.font=O('600',38);ctx.textAlign='left';fit(m.a,bx+(bw-90)/2+14,275,bw-120,38,'center',9);
+if(m.away)crest(img(IMG.crest),D-54,265,46,'SAR');else rc(D-54,265);
 ctx.fillStyle='#fff';ctx.font=O('700',36,1);ctx.textAlign='left';ctx.fillText((m.d==='s'?'SÁBADO ':'DOMINGO ')+dnum(m.d),34,322);
 ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.arc(56,353,22,0,7);ctx.stroke();ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(56,353);ctx.lineTo(56,338);ctx.moveTo(56,353);ctx.lineTo(68,360);ctx.stroke();
 ctx.fillStyle='#fff';ctx.font=O('700',32);fit(m.t,92,364,100,32,'left',14);
 const px=D*.47;ctx.fillStyle='#d93025';ctx.beginPath();ctx.moveTo(px,374);ctx.bezierCurveTo(px-24,350,px-19,326,px,326);ctx.bezierCurveTo(px+19,326,px+24,350,px,374);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(px,342,6,0,7);ctx.fill();
-ctx.fillStyle='#fff';ctx.font=O('600',25,1);fit($('venue').value,px+32,364,D-px-52,25,'left',12);
+ctx.fillStyle='#fff';ctx.font=O('600',25,1);fit(m.ven||$('venue').value,px+32,364,D-px-52,25,'left',9);
 ctx.translate(-ox,0);const gf=ctx.createLinearGradient(0,0,W,380);gf.addColorStop(0,'#f3d98a');gf.addColorStop(.5,'#c9a24a');gf.addColorStop(1,'#f0d27a');ctx.strokeStyle=gf;ctx.lineWidth=3;ctx.strokeRect(2,2,W-4,376);ctx.lineWidth=1;ctx.globalAlpha=.7;ctx.strokeRect(8,8,W-16,364);
 ctx.restore()}
 function twoCol(days,top,bottom){
@@ -142,7 +148,7 @@ const py=y+54,ph=mx*rh+14;ctx.fillStyle='rgba(12,16,12,.82)';rr(x,py,w,ph,14);ct
 d.rows.forEach((m,i)=>{const ry=py+7+i*rh,cy=ry+rh/2,fs=Math.round(Math.min(22,rh*.36)),ts=Math.min(24,fs+3);
 if(i){ctx.fillStyle='rgba(255,255,255,.09)';ctx.fillRect(x+14,ry,w-28,1)}
 ctx.fillStyle='#fff';ctx.font=F('bold',ts);fit(m.t,x+14,cy+8,70,ts,'left',12);
-ctx.font=F('bold',fs);ctx.fillStyle='#d4d43c';fit(m.h,x+92,cy-3,250,fs,'left',11);ctx.fillStyle='#fff';fit(m.a,x+92,cy+fs-1,250,fs,'left',11);
+ctx.font=F('bold',fs);ctx.fillStyle=m.away?'#fff':'#d4d43c';fit(m.h,x+92,cy-3,250,fs,'left',11);ctx.fillStyle=m.away?'#d4d43c':'#fff';fit(m.a,x+92,cy+fs-1,250,fs,'left',11);
 ctx.fillStyle='#d4d43c';const cs=Math.max(12,fs-5),t=m.cat,cw=150;ctx.font=F('bold',cs);
 if(ctx.measureText(t).width<=cw){fit(t,x+w-14,cy+5,cw,cs,'right',11)}
 else{const ws=t.split(' ');let l1=ws[0],j=1;while(j<ws.length&&ctx.measureText(l1+' '+ws[j]).width<=cw)l1+=' '+ws[j++];fit(l1,x+w-14,cy-3,cw,cs,'right',10);fit(ws.slice(j).join(' '),x+w-14,cy+cs,cw,cs,'right',10)}})})}
@@ -151,7 +157,7 @@ const bg=img(IMG.bg);ctx.clearRect(0,0,1080,1350);
 let g=ctx.createLinearGradient(0,0,1080,1350);g.addColorStop(0,'#2b3a32');g.addColorStop(.5,'#1a2420');g.addColorStop(1,'#26342c');ctx.fillStyle=g;ctx.fillRect(0,0,1080,1350);
 if(bg){const k=Math.max(1080/bg.naturalWidth,1350/bg.naturalHeight);ctx.drawImage(bg,0,0,bg.naturalWidth*k,bg.naturalHeight*k);ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(0,0,1080,1350)}
 // header
-ctx.fillStyle='#f4ee3c';ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=6;ctx.font=F('900',54);ctx.textAlign='center';ctx.fillText('XOGAMOS',262,88);ctx.fillText('NA CASA',826,88);ctx.shadowBlur=0;
+ctx.fillStyle='#f4ee3c';ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=6;ctx.font=F('900',54);ctx.textAlign='center';ctx.fillText('XOGAMOS',262,88);ctx.fillText($('pmode').value==='a'?'FÓRA':'NA CASA',826,88);ctx.shadowBlur=0;
 crest(img(IMG.crest),540,70,56,'SAR');
 ctx.fillStyle='rgba(120,140,100,.5)';ctx.fillRect(0,156,1080,3);
 const sorted=M.map(m=>m).sort((a,b)=>(a.d===b.d?0:a.d==='s'?-1:1)||(a.t||'').localeCompare(b.t||''));
@@ -172,8 +178,8 @@ ctx.fillStyle='#3d3d3a';ctx.beginPath();ctx.arc(1030,top+23,23,0,7);ctx.fill();c
 top+=54;const ph=d.rows.length*rh+14;
 ctx.fillStyle='rgba(12,16,12,.82)';rr(0,top,1080,ph,14);ctx.fill();ctx.strokeStyle='#6b7a32';ctx.lineWidth=2;ctx.stroke();
 d.rows.forEach((m,i)=>{const cy=top+7+i*rh+rh/2+8,fs=Math.round(Math.min(26,rh*.4));
-ctx.font=F('bold',fs);if(i){ctx.fillStyle='rgba(255,255,255,.09)';ctx.fillRect(24,top+7+i*rh,1032,1)}ctx.fillStyle='#d4d43c';fit(m.h,24,cy,300,fs,'left',12);
-ctx.fillStyle='#fff';fit(m.a,350,cy,320,fs,'left',12);
+ctx.font=F('bold',fs);if(i){ctx.fillStyle='rgba(255,255,255,.09)';ctx.fillRect(24,top+7+i*rh,1032,1)}ctx.fillStyle=m.away?'#fff':'#d4d43c';fit(m.h,24,cy,300,fs,'left',12);
+ctx.fillStyle=m.away?'#d4d43c':'#fff';fit(m.a,350,cy,320,fs,'left',12);
 ctx.fillStyle='#d4d43c';fit(m.cat,690,cy,290,fs,'left',12);
 ctx.fillStyle='#fff';fit(m.t,1056,cy,70,fs,'right',12)});
 top+=ph+14});
@@ -182,7 +188,7 @@ ctx.fillStyle='rgba(20,24,20,.95)';ctx.fillRect(0,1220,1080,130);
 const sp=img(IMG.spons);if(sp){const k=Math.min(1080/sp.naturalWidth,130/sp.naturalHeight);ctx.drawImage(sp,(1080-sp.naturalWidth*k)/2,1220+(130-sp.naturalHeight*k)/2,sp.naturalWidth*k,sp.naturalHeight*k)}
 else{ctx.fillStyle='#8a9484';ctx.font=F('normal',22);ctx.textAlign='center';ctx.fillText('Sube aquí la franja de patrocinadores',540,1292)}
 save()}
-function dl(){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='xogamos-na-casa.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)},'image/png')}
+function dl(){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='xogamos-'+($('pmode').value==='a'?'fora':'na-casa')+(IMP.wk?'-'+IMP.wk.sat:'')+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)},'image/png')}
 const MES=['XAN.','FEB.','MAR.','ABR.','MAI.','XUÑ.','XUL.','AGO.','SET.','OUT.','NOV.','DEC.'];
 const pz=n=>String(n).padStart(2,'0');
 const nk=s=>(s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
@@ -194,44 +200,82 @@ function tm(s){const m=String(s).match(/(\d{1,2}):(\d{2})/);return m?+m[1]*60+ +
 function pt(v){if(typeof v==='number')return Math.round((v-Math.floor(v))*1440);return tm(v)}
 function pd(v){if(v===''||v==null)return null;
 if(typeof v==='number'){const d=new Date(Math.round((v-25569)*864e5)),fr=v-Math.floor(v);return {k:d.getUTCFullYear()+'-'+pz(d.getUTCMonth()+1)+'-'+pz(d.getUTCDate()),m:fr>0?Math.round(fr*1440):null}}
-const s=String(v).trim();let m=s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
-if(m){let y=+m[3];if(y<100)y+=2000;return {k:y+'-'+pz(+m[2])+'-'+pz(+m[1]),m:tm(s)}}
+const s=String(v).trim();let m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\s*(\d{1,2}):(\d{2})/);
+if(m)return {k:m[3]+'-'+pz(+m[2])+'-'+pz(+m[1]),m:+m[4]*60+ +m[5]};
+m=s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+if(m){let y=+m[3];if(y<100)y+=2000;return {k:y+'-'+pz(+m[2])+'-'+pz(+m[1]),m:tm(s.slice(m.index+m[0].length))}}
 m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);return m?{k:m[1]+'-'+pz(+m[2])+'-'+pz(+m[3]),m:tm(s)}:null}
 const fh=m=>(m==null||isNaN(m))?'':pz(Math.floor(m/60))+':'+pz(m%60);
-const FL=[['fecha','Fecha',/fecha|data\b|date|d[ií]a/i],['hora','Hora',/hora|time/i],['local','Local',/local|casa|equipo ?1|home/i],['vis','Visitante',/visitante|fuera|visita|equipo ?2|away/i],['comp','Competición',/competici|categor|liga|torneo|grupo|fase/i]];
+const FL=[['fecha','Fecha',/fecha|data\b|date|d[ií]a/i],['hora','Hora',/hora|time/i],['local','Local',/local|casa|equipo ?1|home/i],['vis','Visitante',/visitante|fuera|visita|equipo ?2|away/i],['comp','Competición',/competici|torneo|liga|grupo|fase/i],['cat','Categoría',/categor/i],['ven','Pabellón',/pabell|campo|instal|lugar|pista/i]];
+const nm=s=>String(s==null?'':s).replace(/\s+/g,' ').trim();
+const has=(n,l)=>l.split(',').map(nk).filter(Boolean).some(w=>n.includes(w));
+const gen=t=>{const n=nk(t);return has(n,$('imasc').value)?'MASC.':has(n,$('ifem').value)?'FEM.':''};
+const AB={ALEVIN:'ALEV.',BENJAMIN:'BENJ.',PREBENJAMIN:'PREB.',INFANTIL:'INF.',CADETE:'CAD.',JUVENIL:'JUV.'};
+function lab(cat,comp,team){const c=nk(cat),p=nk(comp),g=gen(team);if(!c)return nm(comp).toUpperCase();
+if(/SENIOR/.test(c))return (p.replace('AUTONOMICA','AUT.')+' '+g).trim();
+if(/HONOR/.test(c))return c.replace('DIVISION DE HONOR','DHF');
+const cp=/LIGA OURO/.test(p)?'LIGA OURO':/LIGA PRATA/.test(p)?'LIGA PRATA':/COPA/.test(p)?'COPA FED.':'';
+return [cp,AB[c]||c,/MIXTO/.test(p)?'MIXTO':g].filter(Boolean).join(' ')}
 function importRows(aoa){IMP.rows=aoa;let hr=aoa.findIndex((r,i)=>i<25&&r.filter(c=>c!=='').length>=3&&r.some(c=>/local|visitante|equipo/i.test(c)));IMP.hr=hr<0?0:hr;guess();drawMap();run()}
 function guess(){const hd=IMP.rows[IMP.hr]||[];IMP.map={};FL.forEach(([k,,re])=>{IMP.map[k]=hd.findIndex((c,j)=>re.test(String(c))&&!Object.values(IMP.map).includes(j))})}
 function drawMap(){const hd=IMP.rows[IMP.hr]||[],M2=$('imap');
 let s='<div class="s6 note">Columnas detectadas (corrígelas si hace falta). Fila de cabecera: <input type="number" min="1" value="'+(IMP.hr+1)+'" style="width:60px;display:inline" onchange="IMP.hr=+this.value-1;guess();drawMap();run()"></div>';
 FL.forEach(([k,n])=>{s+='<div class="s2"><label>'+n+'</label><select onchange="IMP.map[\''+k+'\']=+this.value;run()"><option value="-1">— ninguna —</option>'+hd.map((c,j)=>c===''?'':'<option value="'+j+'"'+(IMP.map[k]===j?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select></div>'});
 M2.innerHTML=s}
-function run(){const sat=$('isat').value;if(!IMP.rows.length||!sat)return;
-const [y,mo,d]=sat.split('-').map(Number),su=new Date(Date.UTC(y,mo-1,d+1)),uk=su.getUTCFullYear()+'-'+pz(su.getUTCMonth()+1)+'-'+pz(su.getUTCDate());
+function weekend(){const v=$('isat').value;if(!v)return null;const [y,m,d]=v.split('-').map(Number),w=new Date(y,m-1,d).getDay(),off=w===6?0:w===0?-1:6-w;
+const a=new Date(y,m-1,d+off),b=new Date(y,m-1,d+off+1),k=x=>x.getFullYear()+'-'+pz(x.getMonth()+1)+'-'+pz(x.getDate());return {sat:k(a),sun:k(b),a,b}}
+function run(){const wk=weekend();if(!wk)return;IMP.wk=wk;
+$('iwk').textContent='Fin de semana: sábado '+wk.a.getDate()+' '+MES[wk.a.getMonth()]+' y domingo '+wk.b.getDate()+' '+MES[wk.b.getMonth()];
+if(!IMP.rows.length)return;
 const re=$('iteams').value.split(',').map(nk).filter(Boolean).map(t=>new RegExp('(^| )'+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'( |$)'));
 const mt=s=>re.some(r=>r.test(nk(s))),g=(r,k)=>IMP.map[k]>=0?r[IMP.map[k]]:'';
 const old=Object.fromEntries(IMP.found.map(x=>[x.key,x])),out=[];
-IMP.rows.slice(IMP.hr+1).forEach(r=>{const dt=pd(g(r,'fecha'));if(!dt||(dt.k!==sat&&dt.k!==uk))return;
-const h=String(g(r,'local')).trim(),a=String(g(r,'vis')).trim();if(!h&&!a)return;
-if($('ihome').checked?!mt(h):!(mt(h)||mt(a)))return;
-let mins=pt(g(r,'hora'));if(mins==null||isNaN(mins))mins=dt.m;
-const x={key:dt.k+h+a,k:dt.k,d:dt.k===sat?'s':'d',t:fh(mins),h,a,cat:String(g(r,'comp')).trim(),f:0};if(old[x.key])x.f=old[x.key].f;out.push(x)});
-out.sort((a,b)=>a.k.localeCompare(b.k)||a.t.localeCompare(b.t));IMP.found=out;showFound()}
-function showFound(){const L=$('ires');L.innerHTML=IMP.found.length?'':'<div class="note">Ningún partido para ese fin de semana y esos equipos.</div>';
-IMP.found.forEach((x,i)=>{const c=document.createElement('div');c.className='card row';c.style.justifyContent='space-between';
-c.innerHTML='<div><b>'+(x.d==='s'?'Sáb':'Dom')+' '+x.t+'</b> · '+esc(x.h)+' vs '+esc(x.a)+'<div class="note">'+esc(x.cat)+'</div></div><div class="row"><button data-s="'+i+'" style="'+(x.f?'background:#e8c547;color:#000':'')+'">★</button><button data-x="'+i+'">✕</button></div>';L.appendChild(c)});
+IMP.rows.slice(IMP.hr+1).forEach(r=>{const dt=pd(g(r,'fecha'));if(!dt||(dt.k!==wk.sat&&dt.k!==wk.sun))return;
+const L=nm(g(r,'local')),V=nm(g(r,'vis'));if(!L&&!V)return;const ml=mt(L),mv=mt(V);
+if(!ml&&!mv)return;
+const away=!ml&&mv,st=away?V:L;let mins=pt(g(r,'hora'));if(mins==null||isNaN(mins))mins=dt.m;
+/* se respeta SIEMPRE el orden del Excel: local primero, visitante después. En casa la SAR es h; fuera la SAR es a */
+const x={key:dt.k+L+V,k:dt.k,d:dt.k===wk.sat?'s':'d',t:mins===0?'--:--':fh(mins),h:L,a:V,away:away,cat:lab(g(r,'cat'),g(r,'comp'),st),ven:away?nm(g(r,'ven')).toUpperCase().replace(/^(PABELL[OÓ]N|PAVILL[OÓ]N)( DEPORTIVO)?( MUNICIPAL)?( INSULAR)?/,'PAV.'):'',f:0};
+x.f=old[x.key]?old[x.key].f:(isImp(x.cat)?1:0);out.push(x)});
+const tk=x=>x.t==='--:--'?'99:99':x.t;out.sort((a,b)=>a.k.localeCompare(b.k)||tk(a).localeCompare(tk(b)));IMP.found=out;showFound()}
+const isImp=c=>{const n=nk(c).replace(/[ªº]/g,'');return /(^| )(1|PRIMERA)( |.*)AUT.*MASC/.test(n)||/(^| )(2|SEGUNDA)( |.*)AUT.*MASC/.test(n)||/(^| )(1|PRIMERA)( |.*)AUT.*FEM/.test(n)||/PLATA/.test(n)&&/DHF|HONOR/.test(n)};
+function showFound(){const L=$('ires');L.innerHTML='';
+const nH=IMP.found.filter(x=>!x.away).length,nA=IMP.found.filter(x=>x.away).length;
+if(!IMP.found.length)L.innerHTML='<div class="note">Ningún partido de la SAR para ese fin de semana.</div>';
+[[false,'EN CASA · la SAR es local'],[true,'FUERA · la SAR es visitante']].forEach(([aw,tt])=>{
+const lst=IMP.found.map((x,i)=>[x,i]).filter(([x])=>!!x.away===aw);if(!lst.length)return;
+const hd=document.createElement('h2');hd.textContent=tt+' ('+lst.length+')';L.appendChild(hd);
+lst.forEach(([x,i])=>{const c=document.createElement('div');c.className='card row';c.style.justifyContent='space-between';
+c.innerHTML='<div><b>'+(x.d==='s'?'Sáb':'Dom')+' '+x.t+'</b> · '+esc(x.h)+' <span class="note">vs</span> '+esc(x.a)+'<div class="note">'+esc(x.cat)+(x.ven?' · '+esc(x.ven):'')+'</div></div><div class="row"><button data-s="'+i+'" style="'+(x.f?'background:#e8c547;color:#000':'')+'">★</button><button data-x="'+i+'">✕</button></div>';L.appendChild(c)})});
 L.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const x=IMP.found[b.dataset.s];x.f=x.f?0:1;showFound()});
 L.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{IMP.found.splice(b.dataset.x,1);showFound()});
-$('imsg').textContent=IMP.found.length+' partidos'}
-function useImp(){if(!IMP.found.length){$('imsg').textContent='No hay partidos que usar.';return}
-M=IMP.found.map(x=>({d:x.d,cat:x.cat,card:'',h:x.h,a:x.a,t:x.t,f:x.f,img:CR[nk(x.a)]}));
-const s=$('isat').value.split('-').map(Number),u=new Date(Date.UTC(s[0],s[1]-1,s[2]+1));
-$('ds').value=s[2]+' '+MES[s[1]-1];$('dd').value=u.getUTCDate()+' '+MES[u.getUTCMonth()];tab('c');build();draw()}
+$('bH').textContent='Cartel EN CASA ('+nH+') →';$('bA').textContent='Cartel FUERA ('+nA+') →';$('bH').disabled=!nH;$('bA').disabled=!nA;$('bB').disabled=!(nH||nA);
+$('imsg').textContent=IMP.found.length+' partidos de la SAR ('+(IMP.rows.length-IMP.hr-1)+' filas leídas del Excel)'}
+function useImp(mode){const sel=IMP.found.filter(x=>(mode==='a')===!!x.away);if(!sel.length){$('imsg').textContent='No hay partidos '+(mode==='a'?'fuera':'en casa')+' ese fin de semana.';return false}
+M=sel.map(x=>({d:x.d,cat:x.cat,card:'',h:x.h,a:x.a,t:x.t,f:x.f,ven:x.ven,away:x.away,img:CR[nk(x.away?x.h:x.a)]}));
+const wk=IMP.wk;$('ds').value=wk.a.getDate()+' '+MES[wk.a.getMonth()];$('dd').value=wk.b.getDate()+' '+MES[wk.b.getMonth()];$('pmode').value=mode;tab('c');build();draw();return true}
+function dlBoth(){[['h',0],['a',1]].forEach(([m,i])=>setTimeout(()=>{if(useImp(m))setTimeout(dl,350)},i*1500))}
 function loadSheet(n){importRows(XLSX.utils.sheet_to_json(IMP.wb.Sheets[n],{header:1,raw:true,defval:''}))}
-$('xf').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;if(typeof XLSX==='undefined'){$('imsg').textContent='No se pudo cargar el lector de Excel (¿sin conexión?).';return}
-const r=new FileReader();r.onload=()=>{try{IMP.wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const n=IMP.wb.SheetNames;
-$('shw').innerHTML=n.length>1?'<label>Hoja</label><select onchange="loadSheet(this.value)">'+n.map(x=>'<option>'+esc(x)+'</option>').join('')+'</select>':'';loadSheet(n[0])}catch(x){$('imsg').textContent='No pude leer ese archivo.'}};r.readAsArrayBuffer(f)});
+async function unzip(buf){const u=new Uint8Array(buf),dv=new DataView(buf);let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw 0;
+const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const F={};
+for(let i=0;i<n&&dv.getUint32(p,true)===0x02014b50;i++){const meth=dv.getUint16(p+10,true),cs=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true),name=new TextDecoder().decode(u.subarray(p+46,p+46+nl));
+const o=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true);F[name]={meth,d:u.subarray(o,o+cs)};p+=46+nl+xl+cl}
+const get=async k=>{const f=F[k];if(!f)return null;let b=f.d;if(f.meth===8)b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());return new TextDecoder().decode(b)};
+return {F,get}}
+async function miniXlsx(buf){const {F,get}=await unzip(buf),sh=Object.keys(F).filter(k=>/^xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort()[0],dom=s=>new DOMParser().parseFromString(s,'application/xml');
+let sst=[];const ss=await get('xl/sharedStrings.xml');if(ss)sst=[...dom(ss).getElementsByTagName('si')].map(si=>[...si.getElementsByTagName('t')].map(t=>t.textContent).join(''));
+const rows=[];for(const c of dom(await get(sh)).getElementsByTagName('c')){const ref=c.getAttribute('r')||'',ri=+ref.replace(/\D/g,'')-1;let ci=0;for(const ch of ref.replace(/\d/g,''))ci=ci*26+ch.charCodeAt(0)-64;ci--;
+const t=c.getAttribute('t');let v='';if(t==='inlineStr')v=[...c.getElementsByTagName('t')].map(x=>x.textContent).join('');
+else{const ve=c.getElementsByTagName('v')[0];if(ve){v=ve.textContent;if(t==='s')v=sst[+v]||'';else if(!t||t==='n')v=parseFloat(v)}}
+(rows[ri]=rows[ri]||[])[ci]=v}
+return Array.from(rows,r=>r?Array.from(r,x=>x===undefined?'':x):[])}
+$('xf').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;const buf=await f.arrayBuffer();$('shw').innerHTML='';
+try{if(/\.xlsx$/i.test(f.name)&&typeof DecompressionStream!=='undefined'){const r=await miniXlsx(buf);if(r.length>1){importRows(r);return}}}catch(x){}
+if(typeof XLSX==='undefined'){$('imsg').textContent='No pude leer el archivo.';return}
+try{IMP.wb=XLSX.read(new Uint8Array(buf),{type:'array'});const n=IMP.wb.SheetNames;
+$('shw').innerHTML=n.length>1?'<label>Hoja</label><select onchange="loadSheet(this.value)">'+n.map(x=>'<option>'+esc(x)+'</option>').join('')+'</select>':'';loadSheet(n[0])}catch(x){$('imsg').textContent='No pude leer ese archivo.'}});
 (function(){const d=new Date();d.setDate(d.getDate()+(6-d.getDay()+7)%7);$('isat').value=d.getFullYear()+'-'+pz(d.getMonth()+1)+'-'+pz(d.getDate())})();
-['isat','iteams','ihome'].forEach(i=>$(i).addEventListener('input',run));
+['isat','iteams','imasc','ifem'].forEach(i=>$(i).addEventListener('input',run));run();
 build();draw();
 try{Promise.all([document.fonts.load('600 30px Oswald'),document.fonts.load('700 30px Oswald')]).then(draw)}catch(e){}
 </script></body></html>
